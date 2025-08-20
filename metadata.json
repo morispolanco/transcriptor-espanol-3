@@ -1,0 +1,7 @@
+{
+  "name": "Copy of Real-time Speech Transcriber",
+  "description": "A real-time speech transcription application that uses the Web Speech API to convert spoken language into text. It provides instant visual feedback of both interim and final transcription results.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
