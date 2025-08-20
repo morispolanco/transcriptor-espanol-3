@@ -23,25 +23,19 @@ const App: React.FC = () => {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const prevIsListening = useRef(false);
 
+  const [apiKey, setApiKey] = useState<string | null>(() => localStorage.getItem('openrouter_api_key'));
+
   // New state for correction
   const [correctedText, setCorrectedText] = useState('');
   const [isCorrecting, setIsCorrecting] = useState(false);
   const [correctionError, setCorrectionError] = useState<string | null>(null);
 
   const handleCorrection = async (text: string) => {
-    if (!text.trim()) return;
+    if (!text.trim() || !apiKey) return;
 
     setIsCorrecting(true);
     setCorrectionError(null);
     setCorrectedText('');
-
-    const apiKey = process.env.API_KEY;
-
-    if (!apiKey) {
-      setCorrectionError("La clave API no está configurada. Asegúrate de que la variable de entorno API_KEY esté definida.");
-      setIsCorrecting(false);
-      return;
-    }
 
     const systemInstruction = "Eres un experto en gramática y estilo en español. Tu tarea es corregir el texto que te proporciona el usuario. Mejora la puntuación, la gramática y el estilo para que sea claro y profesional. No agregues introducciones, conclusiones ni ninguna explicación sobre los cambios; devuelve únicamente el texto corregido.";
 
@@ -65,7 +59,10 @@ const App: React.FC = () => {
 
       if (!response.ok) {
         if (response.status === 401) {
-          throw new Error("Autenticación fallida. La clave de API proporcionada no es válida.");
+          // Clear the invalid key
+          localStorage.removeItem('openrouter_api_key');
+          setApiKey(null);
+          throw new Error("Autenticación fallida. La clave de API proporcionada no es válida y ha sido eliminada. Por favor, introduce una clave válida.");
         }
         const errorData = await response.json().catch(() => null);
         const errorMessage = errorData?.error?.message || `La solicitud falló con el estado ${response.status}`;
@@ -93,16 +90,31 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSaveApiKey = (key: string) => {
+    const trimmedKey = key.trim();
+    if (trimmedKey) {
+      localStorage.setItem('openrouter_api_key', trimmedKey);
+      setApiKey(trimmedKey);
+      setCorrectionError(null); // Clear previous errors
+      // If there's a transcript waiting, correct it now
+      if (finalTranscript.trim()) {
+        handleCorrection(finalTranscript.trim());
+      }
+    }
+  };
+
 
   useEffect(() => {
     // Save to history and trigger correction when listening stops
     if (prevIsListening.current && !isListening && finalTranscript.trim()) {
       const transcriptToProcess = finalTranscript.trim();
       setHistory(prev => [transcriptToProcess, ...prev].slice(0, 100));
-      handleCorrection(transcriptToProcess);
+      if (apiKey) {
+        handleCorrection(transcriptToProcess);
+      }
     }
     prevIsListening.current = isListening;
-  }, [isListening, finalTranscript]);
+  }, [isListening, finalTranscript, apiKey]);
 
   const toggleListening = () => {
     if (isListening) {
@@ -156,6 +168,8 @@ const App: React.FC = () => {
 
             {/* Right Panel: AI Correction */}
             <CorrectionDisplay
+              apiKey={apiKey}
+              onSaveApiKey={handleSaveApiKey}
               correctedText={correctedText}
               isCorrecting={isCorrecting}
               correctionError={correctionError}
