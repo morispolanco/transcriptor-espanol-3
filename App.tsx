@@ -35,13 +35,21 @@ const App: React.FC = () => {
     setCorrectionError(null);
     setCorrectedText('');
 
+    const apiKey = process.env.API_KEY;
+
+    if (!apiKey) {
+      setCorrectionError("La clave API no está configurada. Asegúrate de que la variable de entorno API_KEY esté definida.");
+      setIsCorrecting(false);
+      return;
+    }
+
     const systemInstruction = "Eres un experto en gramática y estilo en español. Tu tarea es corregir el texto que te proporciona el usuario. Mejora la puntuación, la gramática y el estilo para que sea claro y profesional. No agregues introducciones, conclusiones ni ninguna explicación sobre los cambios; devuelve únicamente el texto corregido.";
 
     try {
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
-            "Authorization": `Bearer ${process.env.API_KEY}`,
+            "Authorization": `Bearer ${apiKey}`,
             "Content-Type": "application/json",
             "HTTP-Referer": "https://transcriptor.app",
             "X-Title": "Transcriptor y Corrector IA",
@@ -56,8 +64,11 @@ const App: React.FC = () => {
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("Autenticación fallida. La clave de API proporcionada no es válida.");
+        }
         const errorData = await response.json().catch(() => null);
-        const errorMessage = errorData?.error?.message || `Request failed with status ${response.status}`;
+        const errorMessage = errorData?.error?.message || `La solicitud falló con el estado ${response.status}`;
         throw new Error(errorMessage);
       }
       
@@ -72,15 +83,11 @@ const App: React.FC = () => {
 
     } catch (err) {
       console.error("Error calling OpenRouter API:", err);
-      let detailedError = "No se pudo conectar con el servicio de corrección.";
       if (err instanceof Error) {
-          if (err.message.includes('API key')) { // Generic check for API key issues
-            detailedError = "La clave de API no es válida. Por favor, verifica la configuración.";
-          } else {
-            detailedError = `Se produjo un error: ${err.message}`;
-          }
+        setCorrectionError(err.message);
+      } else {
+        setCorrectionError("Ocurrió un error desconocido durante la corrección.");
       }
-      setCorrectionError(detailedError);
     } finally {
       setIsCorrecting(false);
     }
